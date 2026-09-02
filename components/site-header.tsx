@@ -1,0 +1,100 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+
+const links = [
+  ['Products', '#products'],
+  ['Calculator', '#calculator'],
+  ['About', '#about'],
+  ['How it works', '#process'],
+  ['Contact', '#contact'],
+];
+
+export function SiteHeader() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-[#101b36]/8 bg-white/92 backdrop-blur-xl">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <Link
+          href="#top"
+          className="flex items-center gap-3"
+          aria-label="Jesse Remedies home"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#173a76] text-base font-black tracking-[-0.08em] text-white shadow-sm">
+            JR
+          </span>
+          <span>
+            <strong className="block text-base leading-none tracking-[-0.02em] text-[#101b36]">
+              Jesse Remedies
+            </strong>
+            <span className="mt-1 block text-[11px] font-semibold tracking-[0.16em] text-[#60708f] uppercase">
+              Simple · Fast · Fair
+            </span>
+          </span>
+        </Link>
+
+        <nav
+          className="hidden items-center gap-7 text-sm font-semibold text-[#52617d] lg:flex"
+          aria-label="Main navigation"
+        >
+          {links.map(([label, href]) => (
+            <Link
+              key={href}
+              className="transition hover:text-[#173a76]"
+              href={href}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="#apply"
+            className="hidden rounded-xl bg-[#173a76] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(23,58,118,0.18)] transition hover:-translate-y-0.5 hover:bg-[#102c5e] sm:block"
+          >
+            Apply now
+          </Link>
+          <button
+            type="button"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-[#101b36]/10 text-xl text-[#101b36] lg:hidden"
+            aria-label="Toggle navigation"
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? '×' : '☰'}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <nav
+          className="border-t border-[#101b36]/8 bg-white px-5 py-5 lg:hidden"
+          aria-label="Mobile navigation"
+        >
+          <div className="mx-auto flex max-w-7xl flex-col gap-1">
+            {links.map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setOpen(false)}
+                className="rounded-xl px-4 py-3 font-semibold text-[#52617d] hover:bg-[#f5f7fb]"
+              >
+                {label}
+              </Link>
+            ))}
+            <Link
+              href="#apply"
+              onClick={() => setOpen(false)}
+              className="mt-2 rounded-xl bg-[#173a76] px-4 py-3 text-center font-bold text-white sm:hidden"
+            >
+              Apply now
+            </Link>
+          </div>
+        </nav>
+      )}
+    </header>
+  );
+}

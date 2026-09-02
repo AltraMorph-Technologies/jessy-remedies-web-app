@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #f7f8fb;
+  --foreground: #101b36;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(23, 58, 118, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 58, 118, 0.055) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 90%);
+}
+
+::selection {
+  background: #173a76;
+  color: #ffffff;
+}
+
+.eyebrow {
+  color: #236d63;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.section-title {
+  max-width: 42rem;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.section-copy {
+  max-width: 36rem;
+  color: #66748e;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.footer-title {
+  color: #101b36;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.site-faq {
+  overflow: hidden;
+  border: 1px solid rgba(16, 27, 54, 0.08) !important;
+  border-radius: 1.5rem !important;
+  background: #ffffff !important;
+}
+
+.site-faq .ant-collapse-item {
+  border-color: rgba(16, 27, 54, 0.08) !important;
+}
+
+.site-faq .ant-collapse-header {
+  padding: 1.35rem 1.5rem !important;
+  font-weight: 750 !important;
+}
+
+.site-faq .ant-collapse-content-box {
+  padding: 0 1.5rem 1.5rem !important;
+  color: #66748e;
+  line-height: 1.7;
+}
