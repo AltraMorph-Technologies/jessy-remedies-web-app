@@ -459,13 +459,13 @@ export default function Home() {
               href="https://wa.me/2347074126493"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-between rounded-2xl bg-white px-6 py-5 font-black text-[#236d63] transition hover:-translate-y-0.5"
+              className="flex items-center justify-between rounded-2xl bg-white px-6 py-5 font-black !text-[#236d63] transition hover:-translate-y-0.5"
             >
               Chat with the loan desk <span>↗</span>
             </a>
             <a
               href="tel:+2348034770629"
-              className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/8 px-6 py-5 font-black text-white transition hover:bg-white/12"
+              className="flex items-center justify-between rounded-2xl border border-white/15 bg-white/8 px-6 py-5 font-black !text-white transition hover:bg-white/12"
             >
               Call +234 803 477 0629 <span>→</span>
             </a>
