@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from './app-link';
 import { useState } from 'react';
 
 const links = [
@@ -16,7 +16,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#101b36]/8 bg-white/92 backdrop-blur-xl">
-      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-3 sm:px-5 lg:px-8">
         <Link
           href="#top"
           className="flex items-center gap-3"
@@ -52,6 +52,12 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Link
+            href="/login"
+            className="hidden px-2 py-3 text-sm font-bold text-[#173a76] transition hover:text-[#236d63] sm:block"
+          >
+            Login
+          </Link>
+          <Link
             href="#apply"
             className="hidden rounded-xl bg-[#173a76] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(23,58,118,0.18)] transition hover:-translate-y-0.5 hover:bg-[#102c5e] sm:block"
           >
@@ -71,7 +77,7 @@ export function SiteHeader() {
 
       {open && (
         <nav
-          className="border-t border-[#101b36]/8 bg-white px-5 py-5 lg:hidden"
+          className="border-t border-[#101b36]/8 bg-white px-3 py-5 sm:px-5 lg:hidden"
           aria-label="Mobile navigation"
         >
           <div className="mx-auto flex max-w-7xl flex-col gap-1">
@@ -85,6 +91,13 @@ export function SiteHeader() {
                 {label}
               </Link>
             ))}
+            <Link
+              href="/login"
+              onClick={() => setOpen(false)}
+              className="rounded-xl px-4 py-3 font-semibold text-[#173a76] hover:bg-[#f5f7fb] sm:hidden"
+            >
+              Login
+            </Link>
             <Link
               href="#apply"
               onClick={() => setOpen(false)}

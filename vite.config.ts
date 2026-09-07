@@ -45,6 +45,7 @@ export default defineConfig(async () => {
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
   return {
+    envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     css: { postcss: { plugins: [tailwindcss()] } },
     resolve: { dedupe: ['react', 'react-dom'] },
     server: isCodexSeatbeltSandbox

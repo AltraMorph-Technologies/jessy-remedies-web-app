@@ -7,8 +7,9 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <ConfigProvider
       theme={{
+        cssVar: { key: 'jesse-remedies' },
         token: {
-          colorPrimary: '#236d63',
+          colorPrimary: '#173a76',
           colorText: '#101b36',
           colorTextSecondary: '#52617d',
           borderRadius: 12,

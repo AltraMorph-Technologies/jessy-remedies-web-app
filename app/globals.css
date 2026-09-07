@@ -95,3 +95,33 @@ a {
   color: #66748e;
   line-height: 1.7;
 }
+
+.ant-alert {
+  margin-block: 0.5rem 1.25rem !important;
+}
+
+.onboarding-steps .ant-steps-item-title {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.onboarding-steps .ant-steps-item-process .ant-steps-item-title {
+  color: #ffffff !important;
+  font-weight: 800;
+}
+
+.onboarding-steps .ant-steps-item-finish .ant-steps-item-title {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.onboarding-steps .ant-steps-item-wait .ant-steps-item-icon {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  background: transparent !important;
+}
+
+.onboarding-steps .ant-steps-item-wait .ant-steps-icon {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
+.onboarding-steps .ant-steps-item-tail::after {
+  background: rgba(255, 255, 255, 0.16) !important;
+}

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '../components/app-link';
 import { FaqList } from '../components/faq-list';
 import { LoanCalculator } from '../components/loan-calculator';
 import { SiteHeader } from '../components/site-header';
@@ -115,7 +115,7 @@ export default function Home() {
           className="absolute top-0 -right-24 h-96 w-96 rounded-full bg-[#50c3af]/15 blur-3xl"
           aria-hidden="true"
         />
-        <div className="mx-auto grid min-h-[690px] max-w-7xl items-center gap-14 px-5 py-20 lg:grid-cols-[1.08fr_0.92fr] lg:px-8">
+        <div className="mx-auto grid min-h-[690px] max-w-7xl items-center gap-14 px-3 py-20 sm:px-5 lg:grid-cols-[1.08fr_0.92fr] lg:px-8">
           <div className="relative z-10 max-w-2xl">
             <span className="inline-flex items-center gap-2 rounded-full border border-[#173a76]/10 bg-white px-4 py-2 text-xs font-bold tracking-[0.13em] text-[#173a76] uppercase shadow-sm">
               <span className="h-2 w-2 rounded-full bg-[#26a785]" />
@@ -163,7 +163,7 @@ export default function Home() {
               className="absolute -top-9 -left-9 h-32 w-32 rounded-[2rem] bg-[#f0b44d]"
               aria-hidden="true"
             />
-            <div className="relative overflow-hidden rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_32px_90px_rgba(16,27,54,0.14)] sm:p-8">
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-white/80 bg-white p-4 shadow-[0_32px_90px_rgba(16,27,54,0.14)] sm:rounded-[2rem] sm:p-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-bold tracking-[0.14em] text-[#71809a] uppercase">
@@ -210,7 +210,7 @@ export default function Home() {
               </div>
               <Link
                 href="#calculator"
-                className="mt-6 flex items-center justify-between rounded-xl bg-[#e9f7f3] px-5 py-4 text-sm font-bold text-[#236d63] transition hover:bg-[#ddf1eb]"
+                className="mt-6 flex items-center justify-between rounded-xl bg-[#173a76] px-5 py-4 text-sm font-bold text-white transition hover:bg-[#102f65]"
               >
                 Try your own amount <span aria-hidden="true">→</span>
               </Link>
@@ -239,7 +239,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="products" className="scroll-mt-24 px-5 py-24 lg:px-8">
+      <section
+        id="products"
+        className="scroll-mt-24 px-3 py-24 sm:px-5 lg:px-8"
+      >
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr]">
             <div>
@@ -256,7 +259,7 @@ export default function Home() {
               {products.map((product) => (
                 <article
                   key={product.name}
-                  className="group rounded-[1.75rem] border border-[#101b36]/8 bg-white p-6 transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(16,27,54,0.09)] sm:p-7"
+                  className="group rounded-[1.5rem] border border-[#101b36]/8 bg-white p-4 transition hover:-translate-y-1 hover:shadow-[0_22px_60px_rgba(16,27,54,0.09)] sm:rounded-[1.75rem] sm:p-7"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <span
@@ -291,7 +294,7 @@ export default function Home() {
 
       <section
         id="calculator"
-        className="scroll-mt-20 bg-white px-5 py-24 lg:px-8"
+        className="scroll-mt-20 bg-white px-3 py-24 sm:px-5 lg:px-8"
       >
         <div className="mx-auto max-w-7xl">
           <div className="mx-auto mb-12 max-w-2xl text-center">
@@ -306,7 +309,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 py-24 lg:px-8">
+      <section className="px-3 py-24 sm:px-5 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-12 lg:grid-cols-[0.78fr_1.22fr]">
             <div>
@@ -321,7 +324,7 @@ export default function Home() {
             </div>
             <div className="grid gap-px overflow-hidden rounded-[1.75rem] border border-[#101b36]/8 bg-[#101b36]/8 sm:grid-cols-2">
               {benefits.map(([number, title, copy]) => (
-                <article key={number} className="bg-white p-7 sm:p-8">
+                <article key={number} className="bg-white p-5 sm:p-8">
                   <span className="text-xs font-black tracking-[0.14em] text-[#26a785]">
                     {number}
                   </span>
@@ -340,10 +343,10 @@ export default function Home() {
 
       <section
         id="about"
-        className="scroll-mt-20 bg-[#101b36] px-5 py-24 text-white lg:px-8"
+        className="scroll-mt-20 bg-[#101b36] px-3 py-24 text-white sm:px-5 lg:px-8"
       >
         <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div className="relative min-h-[430px] overflow-hidden rounded-[2rem] bg-[#173a76] p-8 sm:p-10">
+          <div className="relative min-h-[430px] overflow-hidden rounded-[1.5rem] bg-[#173a76] p-5 sm:rounded-[2rem] sm:p-10">
             <div
               className="absolute -right-20 -bottom-24 h-80 w-80 rounded-full border-[55px] border-white/5"
               aria-hidden="true"
@@ -393,7 +396,7 @@ export default function Home() {
 
       <section
         id="process"
-        className="scroll-mt-20 bg-white px-5 py-24 lg:px-8"
+        className="scroll-mt-20 bg-white px-3 py-24 sm:px-5 lg:px-8"
       >
         <div className="mx-auto max-w-7xl">
           <div className="max-w-2xl">
@@ -406,7 +409,7 @@ export default function Home() {
             {steps.map(([title, copy], index) => (
               <article
                 key={title}
-                className="relative rounded-[1.5rem] border border-[#101b36]/8 bg-[#f7f8fb] p-6"
+                className="relative rounded-[1.5rem] border border-[#101b36]/8 bg-[#f7f8fb] p-4 sm:p-6"
               >
                 <span className="grid h-11 w-11 place-items-center rounded-full bg-[#173a76] text-sm font-black text-white">
                   {index + 1}
@@ -421,7 +424,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 py-24 lg:px-8">
+      <section className="px-3 py-24 sm:px-5 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.75fr_1.25fr]">
           <div>
             <p className="eyebrow">Frequently asked</p>
@@ -433,8 +436,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="apply" className="scroll-mt-20 px-5 pb-24 lg:px-8">
-        <div className="relative mx-auto overflow-hidden rounded-[2rem] bg-[#236d63] px-6 py-12 text-white sm:px-10 lg:grid lg:max-w-7xl lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-12 lg:px-14 lg:py-16">
+      <section id="apply" className="scroll-mt-20 px-3 pb-24 sm:px-5 lg:px-8">
+        <div className="relative mx-auto overflow-hidden rounded-[1.5rem] bg-[#236d63] px-4 py-10 text-white sm:rounded-[2rem] sm:px-10 sm:py-12 lg:grid lg:max-w-7xl lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-12 lg:px-14 lg:py-16">
           <div
             className="absolute -top-28 -right-28 h-96 w-96 rounded-full border-[60px] border-white/5"
             aria-hidden="true"
@@ -476,7 +479,7 @@ export default function Home() {
 
       <footer
         id="contact"
-        className="scroll-mt-20 border-t border-[#101b36]/8 bg-white px-5 pt-16 lg:px-8"
+        className="scroll-mt-20 border-t border-[#101b36]/8 bg-white px-3 pt-16 sm:px-5 lg:px-8"
       >
         <div className="mx-auto grid max-w-7xl gap-12 pb-14 md:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.9fr_1fr]">
           <div>
