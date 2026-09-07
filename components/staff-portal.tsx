@@ -73,7 +73,7 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
       }
 
       setStaffName(
-        `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() ||
+        `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
           'Staff',
       );
       const [{ data: customerRows }, { count }, { data: onboardingRows }] =
