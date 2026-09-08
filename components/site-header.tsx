@@ -17,7 +17,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-[#101b36]/8 bg-white/92 backdrop-blur-xl">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-3 sm:px-5 lg:px-8">
-        <Link
+        <a
           href="#top"
           className="flex items-center gap-3"
           aria-label="Jesse Remedies home"
@@ -33,20 +33,20 @@ export function SiteHeader() {
               Simple · Fast · Fair
             </span>
           </span>
-        </Link>
+        </a>
 
         <nav
           className="hidden items-center gap-7 text-sm font-semibold text-[#52617d] lg:flex"
           aria-label="Main navigation"
         >
           {links.map(([label, href]) => (
-            <Link
+            <a
               key={href}
               className="transition hover:text-[#173a76]"
               href={href}
             >
               {label}
-            </Link>
+            </a>
           ))}
         </nav>
 
@@ -58,8 +58,8 @@ export function SiteHeader() {
             Login
           </Link>
           <Link
-            href="#apply"
-            className="hidden rounded-xl bg-[#173a76] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(23,58,118,0.18)] transition hover:-translate-y-0.5 hover:bg-[#102c5e] sm:block"
+            href="/register"
+            className="hidden rounded-xl !border-0 !bg-[#173a76] px-5 py-3 text-sm font-bold !text-white !shadow-none transition hover:-translate-y-0.5 hover:!bg-[#102c5e] sm:block"
           >
             Apply now
           </Link>
@@ -82,14 +82,14 @@ export function SiteHeader() {
         >
           <div className="mx-auto flex max-w-7xl flex-col gap-1">
             {links.map(([label, href]) => (
-              <Link
+              <a
                 key={href}
                 href={href}
                 onClick={() => setOpen(false)}
                 className="rounded-xl px-4 py-3 font-semibold text-[#52617d] hover:bg-[#f5f7fb]"
               >
                 {label}
-              </Link>
+              </a>
             ))}
             <Link
               href="/login"
@@ -99,9 +99,9 @@ export function SiteHeader() {
               Login
             </Link>
             <Link
-              href="#apply"
+              href="/register"
               onClick={() => setOpen(false)}
-              className="mt-2 rounded-xl bg-[#173a76] px-4 py-3 text-center font-bold text-white sm:hidden"
+              className="mt-2 rounded-xl !border-0 !bg-[#173a76] px-4 py-3 text-center font-bold !text-white !shadow-none sm:hidden"
             >
               Apply now
             </Link>

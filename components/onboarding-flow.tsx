@@ -25,6 +25,7 @@ import {
 import Image from 'next/image';
 import Link from './app-link';
 import { useEffect, useMemo, useState } from 'react';
+import { errorMessage } from '../lib/errors';
 import { getSupabaseBrowserClient } from '../lib/supabase';
 import { getAccountAccess } from '../lib/staff-roles';
 
@@ -119,149 +120,167 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
       return;
     }
 
-    void supabase.auth.getSession().then(async ({ data }) => {
-      const user = data.session?.user;
-      if (!user) {
-        window.location.replace('/login');
-        return;
-      }
-      setUserId(user.id);
+    void supabase.auth
+      .getSession()
+      .then(async ({ data, error: sessionError }) => {
+        if (sessionError) throw sessionError;
+        const user = data.session?.user;
+        if (!user) {
+          window.location.replace('/login');
+          return;
+        }
+        setUserId(user.id);
 
-      if (staffMode) {
-        const access = await getAccountAccess(supabase, user.id);
-        if (!access.staffRole) {
-          window.location.replace('/dashboard');
+        if (staffMode) {
+          const access = await getAccountAccess(supabase, user.id);
+          if (!access.staffRole) {
+            window.location.replace('/dashboard');
+            return;
+          }
+
+          const savedCustomerId = new URLSearchParams(
+            window.location.search,
+          ).get('customer');
+          if (savedCustomerId) {
+            const { data: customer, error: customerError } = await supabase
+              .from('customers')
+              .select(
+                'id, current_step, completed_steps, onboarding_data, onboarding_status, document_verification',
+              )
+              .eq('id', savedCustomerId)
+              .maybeSingle();
+            if (customerError) throw customerError;
+            if (customer) {
+              const saved = (customer.onboarding_data ?? {}) as Draft;
+              const verification = (customer.document_verification ??
+                {}) as Draft;
+              const rejectedKeys = Object.entries(verification)
+                .filter(([, review]) =>
+                  Boolean(
+                    review &&
+                    typeof review === 'object' &&
+                    'status' in review &&
+                    review.status === 'rejected',
+                  ),
+                )
+                .map(([key]) => key);
+              for (const key of rejectedKeys) {
+                delete saved[`${key}Path`];
+                delete saved[`${key}Name`];
+              }
+              setCustomerId(customer.id);
+              setDraft(saved);
+              setDocumentVerification(verification);
+              setRejectedDocumentKeys(rejectedKeys);
+              setCorrectingDocuments(rejectedKeys.length > 0);
+              setStep(
+                rejectedKeys.length
+                  ? steps.length - 1
+                  : customer.onboarding_status !== 'complete'
+                    ? Math.min(customer.current_step, steps.length - 1)
+                    : 0,
+              );
+              setCompleted(
+                rejectedKeys.length
+                  ? (customer.completed_steps ?? []).filter(
+                      (item: number) => item !== 3,
+                    )
+                  : (customer.completed_steps ?? []),
+              );
+              form.setFieldsValue(saved);
+            }
+          }
+          setLoading(false);
           return;
         }
 
-        const savedCustomerId = new URLSearchParams(window.location.search).get(
-          'customer',
-        );
-        if (savedCustomerId) {
-          const { data: customer } = await supabase
+        const [applicationResult, customerResult] = await Promise.all([
+          supabase
+            .from('loan_applications')
+            .select('current_step, completed_steps, form_data, status')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
             .from('customers')
-            .select(
-              'id, current_step, completed_steps, onboarding_data, onboarding_status, document_verification',
+            .select('id, onboarding_status, document_verification')
+            .eq('auth_user_id', user.id)
+            .maybeSingle(),
+        ]);
+        const { data: application, error } = applicationResult;
+        const { data: customerRecord, error: customerError } = customerResult;
+        if (customerError) throw customerError;
+
+        if (error) {
+          setNotice({ type: 'error', text: readableError(error.message) });
+        } else if (application) {
+          const saved = (application.form_data ?? {}) as Draft;
+          const verification = (customerRecord?.document_verification ??
+            {}) as Draft;
+          const rejectedKeys = Object.entries(verification)
+            .filter(([, review]) =>
+              Boolean(
+                review &&
+                typeof review === 'object' &&
+                'status' in review &&
+                review.status === 'rejected',
+              ),
             )
-            .eq('id', savedCustomerId)
-            .maybeSingle();
-          if (customer) {
-            const saved = (customer.onboarding_data ?? {}) as Draft;
-            const verification = (customer.document_verification ??
-              {}) as Draft;
-            const rejectedKeys = Object.entries(verification)
-              .filter(([, review]) =>
-                Boolean(
-                  review &&
-                  typeof review === 'object' &&
-                  'status' in review &&
-                  review.status === 'rejected',
-                ),
-              )
-              .map(([key]) => key);
-            for (const key of rejectedKeys) {
-              delete saved[`${key}Path`];
-              delete saved[`${key}Name`];
-            }
-            setCustomerId(customer.id);
-            setDraft(saved);
-            setDocumentVerification(verification);
-            setRejectedDocumentKeys(rejectedKeys);
-            setCorrectingDocuments(rejectedKeys.length > 0);
-            setStep(
-              rejectedKeys.length
-                ? steps.length - 1
-                : customer.onboarding_status !== 'complete'
-                  ? Math.min(customer.current_step, steps.length - 1)
-                  : 0,
-            );
-            setCompleted(
-              rejectedKeys.length
-                ? (customer.completed_steps ?? []).filter(
-                    (item: number) => item !== 3,
-                  )
-                : (customer.completed_steps ?? []),
-            );
-            form.setFieldsValue(saved);
+            .map(([key]) => key);
+          setCustomerId(customerRecord?.id ?? '');
+          setDocumentVerification(verification);
+          setRejectedDocumentKeys(rejectedKeys);
+          setCorrectingDocuments(rejectedKeys.length > 0);
+          for (const key of rejectedKeys) {
+            delete saved[`${key}Path`];
+            delete saved[`${key}Name`];
           }
+          const progress = normalizeOnboardingProgress(
+            application.current_step,
+            application.completed_steps ?? [],
+            saved,
+          );
+          setDraft(saved);
+          setStep(
+            rejectedKeys.length
+              ? steps.length - 1
+              : application.status === 'draft'
+                ? progress.currentStep
+                : 0,
+          );
+          setCompleted(
+            rejectedKeys.length
+              ? progress.completedSteps.filter((item) => item !== 3)
+              : progress.completedSteps,
+          );
+          form.setFieldsValue(saved);
+          if (rejectedKeys.length) {
+            setNotice({
+              type: 'error',
+              text: 'A document was rejected. Upload the requested replacement and resubmit it for review.',
+            });
+          }
+        } else {
+          const profile = {
+            firstName: user.user_metadata.first_name,
+            surname: user.user_metadata.last_name,
+            phoneNumber: user.user_metadata.phone,
+            emailAddress: user.email,
+            nationality: 'Nigerian',
+          };
+          setDraft(profile);
+          form.setFieldsValue(profile);
         }
         setLoading(false);
-        return;
-      }
-
-      const { data: application, error } = await supabase
-        .from('loan_applications')
-        .select('current_step, completed_steps, form_data, status')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      const { data: customerRecord } = await supabase
-        .from('customers')
-        .select('id, onboarding_status, document_verification')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        setNotice({ type: 'error', text: readableError(error.message) });
-      } else if (application) {
-        const saved = (application.form_data ?? {}) as Draft;
-        const verification = (customerRecord?.document_verification ??
-          {}) as Draft;
-        const rejectedKeys = Object.entries(verification)
-          .filter(([, review]) =>
-            Boolean(
-              review &&
-              typeof review === 'object' &&
-              'status' in review &&
-              review.status === 'rejected',
-            ),
-          )
-          .map(([key]) => key);
-        setCustomerId(customerRecord?.id ?? '');
-        setDocumentVerification(verification);
-        setRejectedDocumentKeys(rejectedKeys);
-        setCorrectingDocuments(rejectedKeys.length > 0);
-        for (const key of rejectedKeys) {
-          delete saved[`${key}Path`];
-          delete saved[`${key}Name`];
-        }
-        const progress = normalizeOnboardingProgress(
-          application.current_step,
-          application.completed_steps ?? [],
-          saved,
-        );
-        setDraft(saved);
-        setStep(
-          rejectedKeys.length
-            ? steps.length - 1
-            : application.status === 'draft'
-              ? progress.currentStep
-              : 0,
-        );
-        setCompleted(
-          rejectedKeys.length
-            ? progress.completedSteps.filter((item) => item !== 3)
-            : progress.completedSteps,
-        );
-        form.setFieldsValue(saved);
-        if (rejectedKeys.length) {
-          setNotice({
-            type: 'error',
-            text: 'A document was rejected. Upload the requested replacement and resubmit it for review.',
-          });
-        }
-      } else {
-        const profile = {
-          firstName: user.user_metadata.first_name,
-          surname: user.user_metadata.last_name,
-          phoneNumber: user.user_metadata.phone,
-          emailAddress: user.email,
-          nationality: 'Nigerian',
-        };
-        setDraft(profile);
-        form.setFieldsValue(profile);
-      }
-      setLoading(false);
-    });
+      })
+      .catch((error: unknown) => {
+        setNotice({
+          type: 'error',
+          text: readableError(
+            errorMessage(error, 'Could not load your onboarding progress.'),
+          ),
+        });
+        setLoading(false);
+      });
   }, [form, staffMode]);
 
   async function save({
@@ -269,7 +288,21 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
     nextStep = step,
   }: { validate?: boolean; nextStep?: number } = {}) {
     setNotice(null);
-    if (validate) await form.validateFields(stepFields[step]);
+    if (validate) {
+      try {
+        await form.validateFields(stepFields[step]);
+      } catch (error) {
+        setNotice({
+          type: 'error',
+          text: isFormValidationError(error)
+            ? 'Complete the required fields before continuing.'
+            : readableError(
+                errorMessage(error, 'Could not validate this section.'),
+              ),
+        });
+        return false;
+      }
+    }
     const values = form.getFieldsValue(true) as Draft;
     const merged = { ...draft, ...values };
     const replacedDocuments = uploadFields
@@ -362,7 +395,7 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
         );
         if (error) throw error;
 
-        await supabase
+        const { error: customerError } = await supabase
           .from('customers')
           .update({
             first_name: String(merged.firstName ?? ''),
@@ -377,6 +410,7 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
             updated_at: new Date().toISOString(),
           })
           .eq('auth_user_id', userId);
+        if (customerError) throw customerError;
       }
       setDraft(merged);
       setDocumentVerification(nextDocumentVerification);
@@ -386,9 +420,7 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: readableError(
-          error instanceof Error ? error.message : 'Could not save.',
-        ),
+        text: readableError(errorMessage(error, 'Could not save.')),
       });
       return false;
     } finally {
@@ -408,44 +440,55 @@ export function OnboardingFlow({ staffMode = false }: { staffMode?: boolean }) {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     setSaving(true);
-    const completedAt = new Date().toISOString();
-    const { error } = staffMode
-      ? await supabase
+    try {
+      const completedAt = new Date().toISOString();
+      const { error } = staffMode
+        ? await supabase
+            .from('customers')
+            .update({
+              onboarding_status: 'review_pending',
+              onboarding_completed_at: completedAt,
+            })
+            .eq('id', customerId)
+        : await supabase
+            .from('loan_applications')
+            .update({ status: 'submitted', submitted_at: completedAt })
+            .eq('user_id', userId);
+      if (error) throw error;
+
+      if (!staffMode) {
+        const { error: customerError } = await supabase
           .from('customers')
           .update({
-            onboarding_status: correctingDocuments
-              ? 'review_pending'
-              : 'complete',
+            onboarding_status: 'review_pending',
             onboarding_completed_at: completedAt,
           })
-          .eq('id', customerId)
-      : await supabase
-          .from('loan_applications')
-          .update({ status: 'submitted', submitted_at: completedAt })
-          .eq('user_id', userId);
-    if (!staffMode && !error) {
-      await supabase
-        .from('customers')
-        .update({
-          onboarding_status: correctingDocuments
-            ? 'review_pending'
-            : 'complete',
-          onboarding_completed_at: completedAt,
-        })
-        .eq('auth_user_id', userId);
-    }
-    setSaving(false);
-    if (staffMode && !error) {
-      await supabase.from('activity_logs').insert({
-        actor_id: userId,
-        action: 'customer_onboarding_completed',
-        entity_type: 'customer',
-        entity_id: customerId,
-        details: {},
+          .eq('auth_user_id', userId);
+        if (customerError) throw customerError;
+      } else {
+        const { error: logError } = await supabase
+          .from('activity_logs')
+          .insert({
+            actor_id: userId,
+            action: 'customer_onboarding_completed',
+            entity_type: 'customer',
+            entity_id: customerId,
+            details: {},
+          });
+        if (logError) throw logError;
+      }
+
+      window.location.assign(staffMode ? '/portal/customers' : '/dashboard');
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        text: readableError(
+          errorMessage(error, 'Could not submit onboarding.'),
+        ),
       });
+    } finally {
+      setSaving(false);
     }
-    if (error) setNotice({ type: 'error', text: readableError(error.message) });
-    else window.location.assign(staffMode ? '/portal/customers' : '/dashboard');
   }
 
   if (loading) {
@@ -759,6 +802,9 @@ function DocumentUploadField({
         .createSignedUrl(savedPath, 60 * 60)
         .then(({ data }) => {
           if (active) setSavedPreviewUrl(data?.signedUrl ?? '');
+        })
+        .catch(() => {
+          if (active) setSavedPreviewUrl('');
         });
     }
 
@@ -979,7 +1025,35 @@ async function uploadDocuments(
 function readableError(message: string) {
   if (message.includes('loan_applications'))
     return 'Run supabase/schema.sql in your Supabase SQL Editor first.';
+  if (
+    message.includes('onboarding-documents') ||
+    message.toLowerCase().includes('bucket not found')
+  ) {
+    return 'Document storage is not configured yet. Contact support before uploading files.';
+  }
+  if (
+    message.toLowerCase().includes('row-level security') ||
+    message.toLowerCase().includes('permission denied')
+  ) {
+    return 'Your account does not have permission to save this information. Sign in again or contact support.';
+  }
+  if (
+    message.toLowerCase().includes('jwt') ||
+    message.toLowerCase().includes('session')
+  ) {
+    return 'Your session has expired. Sign in again to continue.';
+  }
+  if (
+    message.toLowerCase().includes('failed to fetch') ||
+    message.toLowerCase().includes('network')
+  ) {
+    return 'Check your internet connection and try again.';
+  }
   return message;
+}
+
+function isFormValidationError(error: unknown) {
+  return Boolean(error && typeof error === 'object' && 'errorFields' in error);
 }
 
 function normalizeOnboardingProgress(

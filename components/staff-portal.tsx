@@ -5,6 +5,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   DownOutlined,
+  DownloadOutlined,
   FileTextOutlined,
   LogoutOutlined,
   MenuOutlined,
@@ -76,26 +77,19 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
         `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim() ||
           'Staff',
       );
-      const [{ data: customerRows }, { count }, { data: onboardingRows }] =
-        await Promise.all([
-          supabase
-            .from('customers')
-            .select(
-              'id, auth_user_id, first_name, last_name, email, phone, onboarding_status, registration_source, added_by, created_at',
-            )
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('loan_requests')
-            .select('*', { count: 'exact', head: true }),
-          supabase.from('loan_applications').select('user_id, status'),
-        ]);
+      const [{ data: customerRows }, { count }] = await Promise.all([
+        supabase
+          .from('customers')
+          .select(
+            'id, auth_user_id, first_name, last_name, email, phone, onboarding_status, registration_source, added_by, created_at',
+          )
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('loan_requests')
+          .select('*', { count: 'exact', head: true }),
+      ]);
 
       const rows = (customerRows ?? []) as Customer[];
-      const completedOnlineUsers = new Set(
-        (onboardingRows ?? [])
-          .filter((onboarding) => onboarding.status !== 'draft')
-          .map((onboarding) => onboarding.user_id),
-      );
       const staffIds = Array.from(
         new Set(rows.map((customer) => customer.added_by).filter(Boolean)),
       ) as string[];
@@ -116,11 +110,6 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
       setCustomers(
         rows.map((customer) => ({
           ...customer,
-          onboarding_status:
-            customer.auth_user_id &&
-            completedOnlineUsers.has(customer.auth_user_id)
-              ? 'complete'
-              : customer.onboarding_status,
           added_by_name: customer.added_by
             ? staffNames.get(customer.added_by) || 'Staff member'
             : 'Online registration',
@@ -143,6 +132,44 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
       ].some((value) => value?.toLowerCase().includes(query)),
     );
   }, [customers, search]);
+
+  function exportCustomers() {
+    const headers = [
+      'First name',
+      'Last name',
+      'Email',
+      'Phone',
+      'Onboarding status',
+      'Registration source',
+      'Added by',
+      'Created at',
+    ];
+    const rows = filteredCustomers.map((customer) => [
+      customer.first_name,
+      customer.last_name,
+      customer.email,
+      customer.phone,
+      statusTag(customer.onboarding_status).label,
+      customer.registration_source === 'online' ? 'Online' : 'Staff',
+      customer.registration_source === 'online'
+        ? 'Online registration'
+        : customer.added_by_name,
+      new Date(customer.created_at).toLocaleString(),
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map(toCsvCell).join(','))
+      .join('\r\n');
+    const url = URL.createObjectURL(
+      new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   if (loading) {
     return (
@@ -308,15 +335,26 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
             </>
           ) : (
             <section className="mt-8 rounded-3xl border border-[#101b36]/8 bg-white p-4 sm:p-7">
-              <Input
-                size="large"
-                allowClear
-                prefix={<SearchOutlined className="text-[#8a96aa]" />}
-                placeholder="Search by name, email or phone"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="mb-6 max-w-md"
-              />
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Input
+                  size="large"
+                  allowClear
+                  prefix={<SearchOutlined className="text-[#8a96aa]" />}
+                  placeholder="Search by name, email or phone"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="max-w-md"
+                />
+                <Button
+                  size="large"
+                  icon={<DownloadOutlined />}
+                  onClick={exportCustomers}
+                  disabled={filteredCustomers.length === 0}
+                  className="!rounded-xl !font-bold"
+                >
+                  Export CSV
+                </Button>
+              </div>
               <Table
                 rowKey="id"
                 columns={columns}
@@ -331,6 +369,10 @@ export function StaffPortal({ page }: { page: 'dashboard' | 'customers' }) {
       </div>
     </main>
   );
+}
+
+function toCsvCell(value: string | undefined) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
 }
 
 export function StaffSidebar({
@@ -606,7 +648,6 @@ function statusTag(status: Customer['onboarding_status']) {
   if (status === 'complete') return { label: 'Onboarded', color: 'green' };
   if (status === 'action_required')
     return { label: 'Action required', color: 'red' };
-  if (status === 'review_pending')
-    return { label: 'Review pending', color: 'blue' };
+  if (status === 'review_pending') return { label: 'Reviewing', color: 'blue' };
   return { label: 'In progress', color: 'gold' };
 }

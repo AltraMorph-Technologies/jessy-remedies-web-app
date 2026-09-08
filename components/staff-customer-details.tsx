@@ -10,11 +10,24 @@ import {
   IdcardOutlined,
   MailOutlined,
   PhoneOutlined,
+  PlusOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { Button, Spin, Tag } from 'antd';
+import {
+  Alert,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Radio,
+  Select,
+  Spin,
+  Tag,
+} from 'antd';
 import Link from './app-link';
 import { useEffect, useState } from 'react';
+import { errorMessage } from '../lib/errors';
 import { getSupabaseBrowserClient } from '../lib/supabase';
 import { getAccountAccess } from '../lib/staff-roles';
 import { StaffFooter, StaffSidebar, StaffTopbar } from './staff-portal';
@@ -45,12 +58,21 @@ type CustomerRecord = {
 
 type LoanRequest = {
   id: string;
+  loan_type: string;
   amount: number;
   purpose: string;
   duration: string;
   repayment_frequency: string;
   status: string;
   created_at: string;
+};
+
+type LoanRequestForm = {
+  loanType: string;
+  purpose: string;
+  amount: number;
+  duration: string;
+  repaymentFrequency: 'Weekly' | 'Monthly';
 };
 
 const documentFields = [
@@ -69,6 +91,7 @@ const documentFields = [
 ] as const;
 
 export function StaffCustomerDetails({ customerId }: { customerId: string }) {
+  const [loanForm] = Form.useForm<LoanRequestForm>();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(true);
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
@@ -77,6 +100,12 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
   const [staffId, setStaffId] = useState('');
   const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
   const [verifying, setVerifying] = useState('');
+  const [loanModalOpen, setLoanModalOpen] = useState(false);
+  const [submittingLoan, setSubmittingLoan] = useState(false);
+  const [loanNotice, setLoanNotice] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -128,25 +157,14 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
         );
       }
       if (typedRecord.auth_user_id) {
-        const [{ data: requests }, { data: onboarding }] = await Promise.all([
-          supabase
-            .from('loan_requests')
-            .select(
-              'id, amount, purpose, duration, repayment_frequency, status, created_at',
-            )
-            .eq('user_id', typedRecord.auth_user_id)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('loan_applications')
-            .select('status, form_data')
-            .eq('user_id', typedRecord.auth_user_id)
-            .maybeSingle(),
-        ]);
-        setLoans((requests ?? []) as LoanRequest[]);
+        const { data: onboarding } = await supabase
+          .from('loan_applications')
+          .select('status, form_data')
+          .eq('user_id', typedRecord.auth_user_id)
+          .maybeSingle();
         if (onboarding && onboarding.status !== 'draft') {
           resolvedRecord = {
             ...resolvedRecord,
-            onboarding_status: 'complete',
             completed_steps: [0, 1, 2, 3],
             onboarding_data: {
               ...resolvedRecord.onboarding_data,
@@ -155,6 +173,15 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
           };
         }
       }
+
+      const { data: requests } = await supabase
+        .from('loan_requests')
+        .select(
+          'id, loan_type, amount, purpose, duration, repayment_frequency, status, created_at',
+        )
+        .eq('customer_id', typedRecord.id)
+        .order('created_at', { ascending: false });
+      setLoans((requests ?? []) as LoanRequest[]);
 
       setCustomer(resolvedRecord);
       const previews = await Promise.all(
@@ -226,6 +253,53 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
     setVerifying('');
   }
 
+  async function applyForCustomer(values: LoanRequestForm) {
+    if (!customer || !staffId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    setSubmittingLoan(true);
+    setLoanNotice(null);
+    try {
+      const { data: loan, error } = await supabase
+        .from('loan_requests')
+        .insert({
+          user_id: customer.auth_user_id,
+          customer_id: customer.id,
+          loan_type: values.loanType,
+          purpose: values.purpose,
+          amount: values.amount,
+          duration: values.duration,
+          repayment_frequency: values.repaymentFrequency,
+        })
+        .select(
+          'id, loan_type, amount, purpose, duration, repayment_frequency, status, created_at',
+        )
+        .single();
+      if (error) throw error;
+
+      setLoans((current) => [loan as LoanRequest, ...current]);
+      loanForm.resetFields();
+      setLoanNotice({
+        type: 'success',
+        text: 'Loan application submitted for this customer.',
+      });
+      await supabase.from('activity_logs').insert({
+        actor_id: staffId,
+        action: 'customer_loan_submitted',
+        entity_type: 'customer',
+        entity_id: customer.id,
+        details: { loan_request_id: loan.id, amount: values.amount },
+      });
+    } catch (error) {
+      setLoanNotice({
+        type: 'error',
+        text: errorMessage(error, 'Could not submit the loan application.'),
+      });
+    } finally {
+      setSubmittingLoan(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f3f6fb]">
@@ -294,17 +368,37 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
                 </p>
               </div>
             </div>
-            {customer.registration_source === 'staff' &&
-              ['draft', 'action_required'].includes(
-                customer.onboarding_status,
-              ) && (
-                <Link
-                  href={`/portal/customers/new?customer=${customer.id}`}
-                  className="inline-flex w-fit rounded-xl bg-[#173a76] px-5 py-3 text-sm font-black text-white"
-                >
-                  Continue onboarding
-                </Link>
-              )}
+            <div className="flex flex-wrap gap-3">
+              {customer.registration_source === 'staff' &&
+                ['draft', 'action_required'].includes(
+                  customer.onboarding_status,
+                ) && (
+                  <Link
+                    href={`/portal/customers/new?customer=${customer.id}`}
+                    className="inline-flex w-fit rounded-xl bg-[#173a76] px-5 py-3 text-sm font-black text-white"
+                  >
+                    Continue onboarding
+                  </Link>
+                )}
+              <a
+                href="#documents"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#eef3fb] px-5 py-3 text-sm font-black text-[#173a76]"
+              >
+                <CheckOutlined /> Verify
+              </a>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                disabled={customer.onboarding_status !== 'complete'}
+                onClick={() => {
+                  setLoanNotice(null);
+                  setLoanModalOpen(true);
+                }}
+                className="!h-auto !rounded-xl !border-0 !bg-[#173a76] !px-5 !py-3 !font-black !text-white !shadow-none"
+              >
+                Apply loan
+              </Button>
+            </div>
           </header>
 
           <section className="mt-6 grid gap-6 xl:grid-cols-2">
@@ -391,7 +485,10 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
             </DetailSection>
           </section>
 
-          <section className="mt-6 rounded-3xl border border-[#101b36]/8 bg-white p-6 sm:p-8">
+          <section
+            id="documents"
+            className="mt-6 scroll-mt-6 rounded-3xl border border-[#101b36]/8 bg-white p-6 sm:p-8"
+          >
             <h2 className="text-xl font-black">Documents</h2>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {documentFields.map(({ label, key }) => {
@@ -471,8 +568,12 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
                 {loans.map((loan) => (
                   <article
                     key={loan.id}
-                    className="grid gap-3 rounded-2xl bg-[#f7f8fb] p-4 sm:grid-cols-4 sm:items-center"
+                    className="grid gap-3 rounded-2xl bg-[#f7f8fb] p-4 sm:grid-cols-2 sm:items-center xl:grid-cols-5"
                   >
+                    <div>
+                      <p className="text-xs text-[#71809a]">Loan type</p>
+                      <strong>{loan.loan_type}</strong>
+                    </div>
                     <div>
                       <p className="text-xs text-[#71809a]">Amount</p>
                       <strong>{money(loan.amount)}</strong>
@@ -499,6 +600,99 @@ export function StaffCustomerDetails({ customerId }: { customerId: string }) {
               </p>
             )}
           </section>
+
+          <Modal
+            open={loanModalOpen}
+            onCancel={() => setLoanModalOpen(false)}
+            footer={null}
+            title={`Apply for a loan — ${fullName}`}
+            centered
+          >
+            <p className="mt-2 text-sm leading-6 text-[#71809a]">
+              Submit a loan request on behalf of this verified customer.
+            </p>
+            {loanNotice && (
+              <Alert showIcon type={loanNotice.type} title={loanNotice.text} />
+            )}
+            <Form
+              form={loanForm}
+              layout="vertical"
+              requiredMark={false}
+              className="mt-5"
+              initialValues={{ repaymentFrequency: 'Monthly' }}
+              onFinish={(values) => void applyForCustomer(values)}
+              onValuesChange={() => setLoanNotice(null)}
+            >
+              <Form.Item
+                name="loanType"
+                label="Loan type"
+                rules={[{ required: true, message: 'Select a loan type' }]}
+              >
+                <Select
+                  size="large"
+                  placeholder="Select loan type"
+                  options={[
+                    'Business Loan',
+                    'Weekly Business Loan',
+                    'Employee Loan',
+                    'Special Loan',
+                  ].map((loanType) => ({ label: loanType, value: loanType }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="purpose"
+                label="Loan purpose"
+                rules={[{ required: true, message: 'Enter the loan purpose' }]}
+              >
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item
+                name="amount"
+                label="Amount requested (₦)"
+                rules={[
+                  { required: true, message: 'Enter the amount requested' },
+                ]}
+              >
+                <InputNumber
+                  size="large"
+                  min={1000}
+                  step={1000}
+                  className="!w-full"
+                />
+              </Form.Item>
+              <Form.Item
+                name="duration"
+                label="Loan duration"
+                rules={[{ required: true, message: 'Select a duration' }]}
+              >
+                <Select
+                  size="large"
+                  options={[1, 2, 3, 4, 5, 6, 9, 12].map((month) => ({
+                    label: `${month} ${month === 1 ? 'month' : 'months'}`,
+                    value: `${month} ${month === 1 ? 'month' : 'months'}`,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="repaymentFrequency"
+                label="Repayment frequency"
+                rules={[{ required: true }]}
+              >
+                <Radio.Group options={['Weekly', 'Monthly']} />
+              </Form.Item>
+              <div className="flex justify-end gap-3 border-t border-[#101b36]/8 pt-5">
+                <Button onClick={() => setLoanModalOpen(false)}>Cancel</Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={submittingLoan}
+                  className="!border-0 !bg-[#173a76] !font-bold !text-white !shadow-none"
+                >
+                  Submit application
+                </Button>
+              </div>
+            </Form>
+          </Modal>
         </div>
         <StaffFooter />
       </div>
@@ -584,7 +778,6 @@ function customerStatus(status: CustomerRecord['onboarding_status']) {
   if (status === 'complete') return { label: 'Onboarded', color: 'green' };
   if (status === 'action_required')
     return { label: 'Action required', color: 'red' };
-  if (status === 'review_pending')
-    return { label: 'Review pending', color: 'blue' };
+  if (status === 'review_pending') return { label: 'Reviewing', color: 'blue' };
   return { label: 'In progress', color: 'gold' };
 }

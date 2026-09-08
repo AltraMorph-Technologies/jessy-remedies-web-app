@@ -11,6 +11,7 @@ import {
 import { Alert, Button, Checkbox, Form, Input } from 'antd';
 import Link from './app-link';
 import { useState, useSyncExternalStore } from 'react';
+import { errorMessage } from '../lib/errors';
 import { getSupabaseBrowserClient } from '../lib/supabase';
 import { getAccountAccess } from '../lib/staff-roles';
 
@@ -122,7 +123,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     } catch (error) {
       setNotice({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Please try again.',
+        text: errorMessage(error, 'Please try again.'),
       });
     } finally {
       setLoading(false);

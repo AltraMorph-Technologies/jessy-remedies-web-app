@@ -27,6 +27,7 @@ import {
 } from 'antd';
 import Link from './app-link';
 import { useEffect, useState } from 'react';
+import { errorMessage } from '../lib/errors';
 import { getAccountAccess } from '../lib/staff-roles';
 import { getSupabaseBrowserClient } from '../lib/supabase';
 
@@ -45,6 +46,7 @@ export function BorrowerDashboard() {
   const [submittingLoan, setSubmittingLoan] = useState(false);
   const [loanRequestCount, setLoanRequestCount] = useState(0);
   const [hasStaffAccess, setHasStaffAccess] = useState(false);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
   const [loanNotice, setLoanNotice] = useState<{
     type: 'success' | 'error';
     text: string;
@@ -55,6 +57,7 @@ export function BorrowerDashboard() {
     completed_steps: number[];
   } | null>(null);
   const [customerReview, setCustomerReview] = useState<{
+    id: string;
     onboarding_status: string;
     document_verification: Record<string, { status: string }>;
   } | null>(null);
@@ -66,39 +69,57 @@ export function BorrowerDashboard() {
       return;
     }
 
-    void supabase.auth.getSession().then(async ({ data }) => {
+    void (async () => {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
       if (!data.session) {
         window.location.replace('/login');
         return;
       }
-      const access = await getAccountAccess(supabase, data.session.user.id);
+
+      const currentUser = data.session.user;
+      setUser(currentUser);
+      const access = await getAccountAccess(supabase, currentUser.id);
       if (!access.hasBorrowerAccess && access.staffRole) {
         window.location.replace('/portal');
         return;
       }
-      setUser(data.session.user);
       setHasStaffAccess(Boolean(access.staffRole));
-      void supabase
-        .from('loan_applications')
-        .select('status, completed_steps')
-        .eq('user_id', data.session.user.id)
-        .maybeSingle()
-        .then(({ data: savedApplication }) =>
-          setApplication(savedApplication ?? null),
+
+      const [applicationResult, requestResult, customerResult] =
+        await Promise.all([
+          supabase
+            .from('loan_applications')
+            .select('status, completed_steps')
+            .eq('user_id', currentUser.id)
+            .maybeSingle(),
+          supabase
+            .from('loan_requests')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', currentUser.id),
+          supabase
+            .from('customers')
+            .select('id, onboarding_status, document_verification')
+            .eq('auth_user_id', currentUser.id)
+            .maybeSingle(),
+        ]);
+      const loadError =
+        applicationResult.error ?? requestResult.error ?? customerResult.error;
+      if (loadError) throw loadError;
+
+      setApplication(applicationResult.data ?? null);
+      setLoanRequestCount(requestResult.count ?? 0);
+      setCustomerReview(customerResult.data ?? null);
+    })()
+      .catch((error: unknown) => {
+        setPageNotice(
+          errorMessage(
+            error,
+            'Could not load all of your account information.',
+          ),
         );
-      void supabase
-        .from('loan_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', data.session.user.id)
-        .then(({ count }) => setLoanRequestCount(count ?? 0));
-      void supabase
-        .from('customers')
-        .select('onboarding_status, document_verification')
-        .eq('auth_user_id', data.session.user.id)
-        .maybeSingle()
-        .then(({ data: customer }) => setCustomerReview(customer ?? null));
-      setLoading(false);
-    });
+      })
+      .finally(() => setLoading(false));
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) window.location.replace('/login');
@@ -112,8 +133,14 @@ export function BorrowerDashboard() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     setSigningOut(true);
-    await supabase.auth.signOut();
-    window.location.replace('/login');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      window.location.replace('/login');
+    } catch (error) {
+      setPageNotice(errorMessage(error, 'Could not sign you out.'));
+      setSigningOut(false);
+    }
   }
 
   async function handleAccountMenu({ key }: { key: string }) {
@@ -121,10 +148,13 @@ export function BorrowerDashboard() {
   }
 
   function applyForLoan() {
-    if (
-      application?.status !== 'submitted' ||
-      customerReview?.onboarding_status === 'action_required'
-    ) {
+    if (customerReview?.onboarding_status === 'review_pending') {
+      setPageNotice(
+        'Your onboarding information is being reviewed. You can apply after staff verify your documents.',
+      );
+      return;
+    }
+    if (customerReview?.onboarding_status !== 'complete') {
       window.location.assign('/onboarding');
       return;
     }
@@ -144,32 +174,38 @@ export function BorrowerDashboard() {
     setSubmittingLoan(true);
     setLoanNotice(null);
 
-    const { error } = await supabase.from('loan_requests').insert({
-      user_id: user.id,
-      loan_type: values.loanType,
-      purpose: values.purpose,
-      amount: values.amount,
-      duration: values.duration,
-      repayment_frequency: values.repaymentFrequency,
-    });
+    try {
+      const { error } = await supabase.from('loan_requests').insert({
+        user_id: user.id,
+        customer_id: customerReview?.id ?? null,
+        loan_type: values.loanType,
+        purpose: values.purpose,
+        amount: values.amount,
+        duration: values.duration,
+        repayment_frequency: values.repaymentFrequency,
+      });
+      if (error) throw error;
 
-    setSubmittingLoan(false);
-    if (error) {
+      setLoanRequestCount((count) => count + 1);
+      loanForm.resetFields();
+      setLoanNotice({
+        type: 'success',
+        text: 'Your loan request has been submitted.',
+      });
+    } catch (error) {
+      const message = errorMessage(
+        error,
+        'Could not submit your loan request.',
+      );
       setLoanNotice({
         type: 'error',
-        text: error.message.includes('loan_requests')
+        text: message.includes('loan_requests')
           ? 'The loan request database setup is not complete yet.'
-          : error.message,
+          : message,
       });
-      return;
+    } finally {
+      setSubmittingLoan(false);
     }
-
-    setLoanRequestCount((count) => count + 1);
-    loanForm.resetFields();
-    setLoanNotice({
-      type: 'success',
-      text: 'Your loan request has been submitted.',
-    });
   }
 
   if (loading || !user) {
@@ -188,8 +224,9 @@ export function BorrowerDashboard() {
   const applicationStatus = application?.status ?? 'Not started';
   const needsDocumentReplacement =
     customerReview?.onboarding_status === 'action_required';
-  const onboardingComplete =
-    applicationStatus === 'submitted' && !needsDocumentReplacement;
+  const onboardingReviewing =
+    customerReview?.onboarding_status === 'review_pending';
+  const onboardingComplete = customerReview?.onboarding_status === 'complete';
   const rejectedDocuments = Object.entries(
     customerReview?.document_verification ?? {},
   )
@@ -270,6 +307,16 @@ export function BorrowerDashboard() {
       </header>
 
       <div className="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
+        {pageNotice && (
+          <Alert
+            showIcon
+            closable
+            type="error"
+            title={pageNotice}
+            onClose={() => setPageNotice(null)}
+            className="mb-6"
+          />
+        )}
         <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-black tracking-[0.15em] text-[#236d63] uppercase">
@@ -285,9 +332,14 @@ export function BorrowerDashboard() {
           <Button
             type="primary"
             onClick={applyForLoan}
+            disabled={onboardingReviewing}
             className="!h-12 !w-fit !rounded-xl !border-0 !bg-[#173a76] !px-5 !font-black !text-white !shadow-none"
           >
-            {onboardingComplete ? 'Apply for a loan' : 'Continue onboarding'}{' '}
+            {onboardingReviewing
+              ? 'Application under review'
+              : onboardingComplete
+                ? 'Apply for a loan'
+                : 'Continue onboarding'}{' '}
             <ArrowRightOutlined />
           </Button>
         </section>
@@ -334,16 +386,20 @@ export function BorrowerDashboard() {
             value={
               needsDocumentReplacement
                 ? 'Action required'
-                : applicationStatus === 'draft'
-                  ? 'Draft'
-                  : applicationStatus
+                : onboardingReviewing
+                  ? 'Reviewing'
+                  : applicationStatus === 'draft'
+                    ? 'Draft'
+                    : applicationStatus
             }
             note={
               needsDocumentReplacement
                 ? 'Replace rejected document'
-                : applicationStatus === 'draft'
-                  ? 'Continue when ready'
-                  : 'Account ready'
+                : onboardingReviewing
+                  ? 'Documents under staff review'
+                  : applicationStatus === 'draft'
+                    ? 'Continue when ready'
+                    : 'Account ready'
             }
           />
         </section>
@@ -363,13 +419,16 @@ export function BorrowerDashboard() {
             <Button
               type="text"
               onClick={applyForLoan}
+              disabled={onboardingReviewing}
               className="mt-7 !h-11 !rounded-xl !border-0 !bg-[#173a76] !px-5 !font-black !text-white !shadow-none"
             >
-              {onboardingComplete
-                ? 'Apply for a loan'
-                : progress > 0
-                  ? 'Resume onboarding'
-                  : 'Start onboarding'}
+              {onboardingReviewing
+                ? 'Application under review'
+                : onboardingComplete
+                  ? 'Apply for a loan'
+                  : progress > 0
+                    ? 'Resume onboarding'
+                    : 'Start onboarding'}
             </Button>
           </div>
 

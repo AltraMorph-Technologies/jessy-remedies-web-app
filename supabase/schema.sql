@@ -301,7 +301,8 @@ set
   onboarding_data = customer.onboarding_data || application.form_data,
   onboarding_status = case
     when application.status = 'draft' then customer.onboarding_status
-    else 'complete'
+    when customer.onboarding_status = 'complete' then 'complete'
+    else 'review_pending'
   end,
   completed_steps = case
     when application.status = 'draft' then customer.completed_steps
@@ -315,9 +316,20 @@ set
 from public.loan_applications as application
 where customer.auth_user_id = application.user_id;
 
+update public.customers
+set onboarding_status = 'review_pending'
+where onboarding_status = 'complete'
+  and (
+    coalesce(document_verification -> 'passportFile' ->> 'status', '') <> 'verified'
+    or coalesce(document_verification -> 'idCardFile' ->> 'status', '') <> 'verified'
+    or coalesce(document_verification -> 'utilityFile' ->> 'status', '') <> 'verified'
+    or coalesce(document_verification -> 'bankStatementFile' ->> 'status', '') <> 'verified'
+  );
+
 create table if not exists public.loan_requests (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  customer_id uuid references public.customers(id) on delete cascade,
   loan_type text not null default 'Business Loan' check (loan_type in ('Business Loan', 'Weekly Business Loan', 'Employee Loan', 'Special Loan')),
   purpose text not null,
   amount numeric(14, 2) not null check (amount >= 1000),
@@ -331,6 +343,25 @@ create table if not exists public.loan_requests (
 alter table public.loan_requests
 add column if not exists loan_type text not null default 'Business Loan';
 
+alter table public.loan_requests
+add column if not exists customer_id uuid references public.customers(id) on delete cascade;
+
+alter table public.loan_requests
+alter column user_id drop not null;
+
+update public.loan_requests as request
+set customer_id = customer.id
+from public.customers as customer
+where request.customer_id is null
+  and request.user_id = customer.auth_user_id;
+
+alter table public.loan_requests
+drop constraint if exists loan_requests_customer_check;
+
+alter table public.loan_requests
+add constraint loan_requests_customer_check
+check (user_id is not null or customer_id is not null);
+
 alter table public.loan_requests enable row level security;
 
 drop policy if exists "Borrowers can read their loan requests" on public.loan_requests;
@@ -343,7 +374,22 @@ drop policy if exists "Borrowers can submit loan requests" on public.loan_reques
 create policy "Borrowers can submit loan requests"
 on public.loan_requests for insert
 to authenticated
-with check (auth.uid() = user_id);
+with check (
+  auth.uid() = user_id
+  and (
+    customer_id is null
+    or exists (
+      select 1 from public.customers
+      where id = customer_id and auth_user_id = auth.uid()
+    )
+  )
+);
+
+drop policy if exists "Staff can submit customer loan requests" on public.loan_requests;
+create policy "Staff can submit customer loan requests"
+on public.loan_requests for insert
+to authenticated
+with check (public.is_staff() and customer_id is not null);
 
 drop policy if exists "Staff can read loan requests" on public.loan_requests;
 create policy "Staff can read loan requests"
